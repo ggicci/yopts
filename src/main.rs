@@ -1,5 +1,6 @@
 use anyhow::{anyhow, Result};
 use clap::Parser;
+use ramen;
 use std::io::{self, Read};
 
 const APP: &str = "ramen";
@@ -39,5 +40,13 @@ fn main() -> Result<()> {
         return Err(anyhow!("Error: both stdin and command-line argument were provided. Please use only one of them."));
     }
 
+    let spec = if spec_from_pipe.is_empty() {
+        spec_from_arg
+    } else {
+        spec_from_pipe
+    };
+
+    let output = ramen::program::parse(&spec)?;
+    println!("{}", output);
     Ok(())
 }

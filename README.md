@@ -11,17 +11,18 @@ set -euo pipefail
 
 program="
 ---
+version: 1.0
 program: upload
 positionals: SRC DST
 args:
-  - name: verbose
+  - name: -v/--verbose
     type: boolean
     required: false
-  - name: threads
+  - name: -t/--threads
     type: number
     required: false
     default: 8
-  - name: protocol
+  - name: --protocol
     type: string
     required: false
     default: scp
