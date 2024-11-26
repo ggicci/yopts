@@ -7,3 +7,4 @@ edition = "2021"
 anyhow = "1.0.93"
 atty = "0.2.14"
 clap = { version = "4.5.21", features = ["derive"] }
+yaml-rust = "0.4.5"
