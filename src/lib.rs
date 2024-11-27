@@ -1,1 +1,2 @@
-pub mod program;
+pub mod parser;
+pub use parser::parse;

@@ -10,21 +10,32 @@ Usage
 set -euo pipefail
 
 program="
+version: 1.0
+program: upload
+args: [SRC DST -v/--verbose -t/--threads --protocol]
+"
+
+program="
 ---
 version: 1.0
 program: upload
-positionals: SRC DST
 args:
-  - name: -v/--verbose
+  - name: SRC
+    action: append
+  - name: DST
+  - name: verbose
+    short: -v
+    long: --verbose
     type: boolean
-    required: false
-  - name: -t/--threads
+  - name: threads
+    short: -t
+    long: --threads
     type: number
-    required: false
     default: 8
-  - name: --protocol
+  - name: protocol
+    short: -p
+    long: --protocol
     type: string
-    required: false
     default: scp
     select: [scp, rsync, aws]
 "

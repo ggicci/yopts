@@ -46,7 +46,7 @@ fn main() -> Result<()> {
         spec_from_pipe
     };
 
-    let output = ramen::program::parse(&spec)?;
+    let output = ramen::parse(&spec)?;
     println!("{}", output);
     Ok(())
 }
