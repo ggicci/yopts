@@ -29,27 +29,38 @@ impl ArgumentParser {
         Self { doc }
     }
 
-    pub fn version(&self) -> String {
-        String::from(self.doc["version"].as_str().unwrap_or_default())
+    /// The version of the spec.
+    pub fn version(&self) -> &str {
+        self.doc["version"].as_str().unwrap_or_default()
     }
 
-    pub fn program(&self) -> String {
-        String::from(self.doc["program"].as_str().unwrap_or_default())
+    /// The name of the program.
+    pub fn program(&self) -> &str {
+        self.doc["program"].as_str().unwrap_or_default()
     }
 
-    pub fn iter_args(&self) -> impl Iterator<Item = Argument> {
-        ArgumentIterator::new(self.doc["args"].as_vec())
+    /// A description of the program.
+    pub fn about(&self) -> &str {
+        self.doc["about"].as_str().unwrap_or_default()
+    }
+
+    /// Create a list of Argument instance by parsing the `args` definitions.
+    pub fn args(&self) -> Vec<Argument> {
+        self.doc["args"]
+            .as_vec()
+            .map(|vec| vec.iter().map(|item| Argument::new(item.clone())).collect())
+            .unwrap_or_default()
     }
 }
 
 /// Represents a [`clap::Arg`], see tutorial:
 /// https://docs.rs/clap/latest/clap/_tutorial/chapter_2/index.html
-pub struct Argument<'a> {
-    doc: &'a Yaml,
+pub struct Argument {
+    doc: Yaml,
 }
 
-impl<'a> Argument<'a> {
-    pub fn new(doc: &'a Yaml) -> Self {
+impl Argument {
+    pub fn new(doc: Yaml) -> Self {
         Self { doc }
     }
 
@@ -64,10 +75,15 @@ impl<'a> Argument<'a> {
     }
 
     /// Provide the short arg name, ex. -c, -d, -t, etc.
-    pub fn short(&self) -> Option<String> {
+    pub fn short(&self) -> Option<char> {
         match self.bare_name() {
-            Some(name) => extract_short_long_name(name).map(|(short, _)| short),
-            None => self.doc["short"].as_str().map(|x| x.to_string()),
+            Some(name) => extract_short_long_name(name)
+                .map(|(short, _)| short.chars().next())
+                .flatten(),
+            None => self.doc["short"]
+                .as_str()
+                .map(|x| x.chars().next())
+                .flatten(),
         }
     }
 
@@ -96,47 +112,6 @@ impl<'a> Argument<'a> {
     }
 }
 
-/// Extract the short and long name from the given text when it complies to the pattern `-s/--long`.
-fn extract_short_long_name(haystack: &str) -> Option<(String, String)> {
-    if let Some(captures) = REG_SHORT_LONG_ARG_NAME.captures(haystack) {
-        let short_name = captures.name("short").unwrap().as_str();
-        let long_name = captures.name("long").unwrap().as_str();
-        Some((short_name.to_string(), long_name.to_string()))
-    } else {
-        None
-    }
-}
-
-struct ArgumentIterator<'a> {
-    args: Option<&'a Vec<Yaml>>,
-    index: usize,
-}
-
-impl<'a> ArgumentIterator<'a> {
-    fn new(args: Option<&'a Vec<Yaml>>) -> Self {
-        Self { args, index: 0 }
-    }
-}
-
-impl<'a> Iterator for ArgumentIterator<'a> {
-    type Item = Argument<'a>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.args {
-            None => None,
-            Some(args) => {
-                if self.index < args.len() {
-                    let item = &args[self.index];
-                    self.index += 1;
-                    Some(Argument::new(item))
-                } else {
-                    None
-                }
-            }
-        }
-    }
-}
-
 pub fn parse(yaml: &str) -> Result<String, Error> {
     let res = String::new();
 
@@ -144,8 +119,21 @@ pub fn parse(yaml: &str) -> Result<String, Error> {
     validate_root_docs(&docs)?;
 
     let parser = ArgumentParser::new(docs.remove(0));
+    let mut command = Command::new(parser.program().to_string()).about(parser.about().to_string());
 
-    Ok(res)
+    let args = parser.args();
+    for arg in args.iter() {
+        let mut clap_arg = Arg::new(arg.name().to_string()).short(arg.short());
+        if let Some(long) = arg.long() {
+            clap_arg = clap_arg.long(long);
+        }
+        command = command.arg(clap_arg);
+    }
+    command.build();
+
+    let matches = command.get_matches();
+    println!("{:?}", matches);
+    Ok("".to_string())
 }
 
 fn validate_root_docs(docs: &Vec<Yaml>) -> Result<(), Error> {
@@ -156,6 +144,17 @@ fn validate_root_docs(docs: &Vec<Yaml>) -> Result<(), Error> {
         return Err(Error::MultiDocs);
     }
     Ok(())
+}
+
+/// Extract the short and long name from the given text when it complies to the pattern `-s/--long`.
+fn extract_short_long_name(haystack: &str) -> Option<(String, String)> {
+    if let Some(captures) = REG_SHORT_LONG_ARG_NAME.captures(haystack) {
+        let short_name = captures.name("short").unwrap().as_str();
+        let long_name = captures.name("long").unwrap().as_str();
+        Some((short_name.to_string(), long_name.to_string()))
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]
@@ -174,7 +173,7 @@ mod test {
     #[test]
     fn arg_bare_name() -> anyhow::Result<()> {
         let doc = load_yaml("SRC")?;
-        let parg = Argument::new(&doc);
+        let parg = Argument::new(doc);
         assert_eq!(Some("SRC"), parg.bare_name());
         assert_eq!("SRC", parg.name());
         Ok(())
@@ -187,7 +186,7 @@ mod test {
         name: DEST
         "#,
         )?;
-        let parg = Argument::new(&doc);
+        let parg = Argument::new(doc);
         assert!(parg.bare_name().is_none());
         assert_eq!("DEST", parg.name());
         Ok(())
