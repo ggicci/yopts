@@ -1,6 +1,12 @@
-use clap::Command;
+use clap::{Arg, Command};
 use thiserror::Error;
 use yaml_rust::{ScanError, Yaml, YamlLoader};
+
+use once_cell::sync::Lazy;
+use regex::Regex;
+
+static REG_SHORT_LONG_ARG_NAME: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"^-(?P<short>[a-zA-Z])/--(?P<long>[a-zA-Z][a-zA-Z0-9-]*)$").unwrap());
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -55,6 +61,49 @@ impl<'a> Argument<'a> {
         self.bare_name()
             .or(self.doc["name"].as_str())
             .unwrap_or_default()
+    }
+
+    /// Provide the short arg name, ex. -c, -d, -t, etc.
+    pub fn short(&self) -> Option<String> {
+        match self.bare_name() {
+            Some(name) => extract_short_long_name(name).map(|(short, _)| short),
+            None => self.doc["short"].as_str().map(|x| x.to_string()),
+        }
+    }
+
+    /// Provide the long arg name, ex. --file, --num-threads, etc.
+    pub fn long(&self) -> Option<String> {
+        match self.bare_name() {
+            Some(name) => extract_short_long_name(name).map(|(_, long)| long),
+            None => self.doc["long"].as_str().map(|x| x.to_string()),
+        }
+    }
+
+    /// The type of the argument, can be string, number, boolean.
+    pub fn r#type(&self) -> &str {
+        self.doc["type"].as_str().unwrap_or("string")
+    }
+
+    /// The default value of the argument on absent.
+    pub fn default(&self) -> &str {
+        self.doc["default"].as_str().unwrap_or_default()
+    }
+
+    pub fn select(&self) -> Option<Vec<&str>> {
+        self.doc["select"]
+            .as_vec()
+            .map(|x| x.iter().map(|v| v.as_str().unwrap_or_default()).collect())
+    }
+}
+
+/// Extract the short and long name from the given text when it complies to the pattern `-s/--long`.
+fn extract_short_long_name(haystack: &str) -> Option<(String, String)> {
+    if let Some(captures) = REG_SHORT_LONG_ARG_NAME.captures(haystack) {
+        let short_name = captures.name("short").unwrap().as_str();
+        let long_name = captures.name("long").unwrap().as_str();
+        Some((short_name.to_string(), long_name.to_string()))
+    } else {
+        None
     }
 }
 
