@@ -3,10 +3,11 @@ use thiserror::Error;
 use yaml_rust::{ScanError, Yaml, YamlLoader};
 
 use once_cell::sync::Lazy;
-use regex::Regex;
+use regex::{Match, Regex};
 
-static REG_SHORT_LONG_ARG_NAME: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"^-(?P<short>[a-zA-Z])/--(?P<long>[a-zA-Z][a-zA-Z0-9-]*)$").unwrap());
+static REG_SHORT_LONG_ARG_NAME: Lazy<Regex> = Lazy::new(|| {
+    Regex::new(r"^-(?P<short>[a-zA-Z])(/--(?P<long>[a-zA-Z][a-zA-Z0-9-]{1,}))*|--(?P<only_long>[a-zA-Z][a-zA-Z0-9-]{1,})$").unwrap()
+});
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -55,12 +56,14 @@ impl ArgumentParser {
 
 /// Represents a [`clap::Arg`], see tutorial:
 /// https://docs.rs/clap/latest/clap/_tutorial/chapter_2/index.html
+#[derive(Debug, Clone)]
 pub struct Argument {
     doc: Yaml,
 }
 
 impl Argument {
     pub fn new(doc: Yaml) -> Self {
+        println!("Argument::new() with {:?}", doc);
         Self { doc }
     }
 
@@ -76,23 +79,23 @@ impl Argument {
 
     /// Provide the short arg name, ex. -c, -d, -t, etc.
     pub fn short(&self) -> Option<char> {
-        match self.bare_name() {
-            Some(name) => extract_short_long_name(name)
-                .map(|(short, _)| short.chars().next())
-                .flatten(),
-            None => self.doc["short"]
-                .as_str()
-                .map(|x| x.chars().next())
-                .flatten(),
-        }
+        let haystack = self
+            .bare_name()
+            .or(self.doc["short"].as_str())
+            .unwrap_or_default();
+        extract_short_long_name(haystack)
+            .0
+            .map(|x| x.chars().next())
+            .flatten()
     }
 
     /// Provide the long arg name, ex. --file, --num-threads, etc.
     pub fn long(&self) -> Option<String> {
-        match self.bare_name() {
-            Some(name) => extract_short_long_name(name).map(|(_, long)| long),
-            None => self.doc["long"].as_str().map(|x| x.to_string()),
-        }
+        let haystack = self
+            .bare_name()
+            .or(self.doc["long"].as_str())
+            .unwrap_or_default();
+        extract_short_long_name(haystack).1
     }
 
     /// The type of the argument, can be string, number, boolean.
@@ -112,8 +115,8 @@ impl Argument {
     }
 }
 
-pub fn parse(yaml: &str) -> Result<String, Error> {
-    let res = String::new();
+pub fn parse(yaml: &str, optstring: &Vec<String>) -> Result<String, Error> {
+    let _res = String::new();
 
     let mut docs = YamlLoader::load_from_str(yaml)?;
     validate_root_docs(&docs)?;
@@ -123,7 +126,12 @@ pub fn parse(yaml: &str) -> Result<String, Error> {
 
     let args = parser.args();
     for arg in args.iter() {
-        let mut clap_arg = Arg::new(arg.name().to_string()).short(arg.short());
+        println!("  -- ARG: {:?}", arg);
+        println!("    short: {:?} long: {:?}", arg.short(), arg.long());
+        let mut clap_arg = Arg::new(arg.name().to_string());
+        if let Some(short) = arg.short() {
+            clap_arg = clap_arg.short(short);
+        }
         if let Some(long) = arg.long() {
             clap_arg = clap_arg.long(long);
         }
@@ -131,8 +139,11 @@ pub fn parse(yaml: &str) -> Result<String, Error> {
     }
     command.build();
 
-    let matches = command.get_matches();
-    println!("{:?}", matches);
+    let matches = command.get_matches_from(optstring);
+
+    // for arg in args.iter() {}
+
+    println!("[MATCHES]: {:?}", matches);
     Ok("".to_string())
 }
 
@@ -147,14 +158,15 @@ fn validate_root_docs(docs: &Vec<Yaml>) -> Result<(), Error> {
 }
 
 /// Extract the short and long name from the given text when it complies to the pattern `-s/--long`.
-fn extract_short_long_name(haystack: &str) -> Option<(String, String)> {
+fn extract_short_long_name(haystack: &str) -> (Option<String>, Option<String>) {
+    let convert = |m: Option<Match<'_>>| m.map(|x| x.as_str().to_string());
+    let mut short_name = None;
+    let mut long_name = None;
     if let Some(captures) = REG_SHORT_LONG_ARG_NAME.captures(haystack) {
-        let short_name = captures.name("short").unwrap().as_str();
-        let long_name = captures.name("long").unwrap().as_str();
-        Some((short_name.to_string(), long_name.to_string()))
-    } else {
-        None
+        short_name = convert(captures.name("short"));
+        long_name = convert(captures.name("long")).or(convert(captures.name("only_long")));
     }
+    (short_name, long_name)
 }
 
 #[cfg(test)]

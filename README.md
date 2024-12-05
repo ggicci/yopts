@@ -12,7 +12,7 @@ set -euo pipefail
 program="
 version: 1.0
 program: upload
-args: [SRC DST -v/--verbose -t/--threads --protocol]
+args: [SRC, DST, -v/--verbose, -t/--threads, --protocol]
 "
 
 program="
@@ -39,7 +39,7 @@ args:
     default: scp
     select: [scp, rsync, aws]
 "
-eval "$( ramen "$program" )"
+eval "$( ramen "$program" -- "$@" )"
 
 main() {
     echo "
