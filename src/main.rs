@@ -9,13 +9,18 @@ const DESC_ABOUT: &str = "An easier way to define and parse arguments in SHELL s
 #[derive(Debug, Parser)]
 #[command(name=&APP, version, about=DESC_ABOUT, long_about=None)]
 struct Cli {
-    #[arg(value_name = "SPEC")]
+    /// A definition of the argument parser in YAML format.
+    #[arg()]
     spec: Option<String>,
 
-    /// Passed after a '--'. Usually ramen is used in the bash script in this way:
-    /// ```bash
-    /// eval "$( ramen "$program" -- "$@" )"
-    /// ```
+    /// Enable debug mode.
+    #[arg(short, long, value_name = "DEBUG")]
+    debug: bool,
+
+    /// The arguments to parse. Passed as the last argument, after a "--".
+    /// Usually it's "$@" in the bash script. e.g.
+    ///
+    ///     eval "$( ramen "$program" -- "$@" )"
     #[arg(last = true)]
     optstring: Vec<String>,
 }
@@ -34,7 +39,7 @@ fn read_spec_from_stdin() -> Result<String> {
 }
 
 fn main() -> Result<()> {
-    let cli = Cli::parse();
+    let mut cli = Cli::parse();
 
     let spec_from_pipe = read_spec_from_stdin()?;
     let spec_from_arg = cli.spec.unwrap_or_default();
@@ -50,7 +55,11 @@ fn main() -> Result<()> {
         spec_from_pipe
     };
 
+    // Since we will be calling clap::Command::get_matches_from(VEC) API
+    // to parse the optstring, and it treats the first element from the given
+    // VEC, we insert a dummy value here to the optstring.
+    cli.optstring.insert(0, "PROG".to_string());
     let output = ramen::parse(&spec, &cli.optstring)?;
-    println!("[OUTPUT]: {}", output);
+    println!("{}", output);
     Ok(())
 }

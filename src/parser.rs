@@ -1,9 +1,9 @@
-use clap::{Arg, Command};
-use thiserror::Error;
-use yaml_rust::{ScanError, Yaml, YamlLoader};
-
+use clap::{Arg, ArgMatches, Command};
 use once_cell::sync::Lazy;
 use regex::{Match, Regex};
+use std::fmt::Write;
+use thiserror::Error;
+use yaml_rust::{ScanError, Yaml, YamlLoader};
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -22,14 +22,19 @@ pub enum Error {
     #[error("multi-docs detected in the given yaml, which is not supported")]
     MultiDocs,
 
-    #[error("version must be provided (key: version)")]
-    MissingSpecVersion,
+    #[error(
+        "version must be provided, the value MUST be a semver string (key: version, ex: \"1.2.3\")"
+    )]
+    MissingVersion,
 
     #[error("missing program name (key: program)")]
-    MissingProgramName,
+    MissingProgram,
 
     #[error("missing argument name (key: args[].name)")]
     MissingArgumentName,
+
+    #[error(transparent)]
+    Format(#[from] std::fmt::Error),
 }
 
 pub struct ArgumentParser {
@@ -38,6 +43,7 @@ pub struct ArgumentParser {
 
 impl ArgumentParser {
     pub fn new(doc: Yaml) -> Result<Self> {
+        println!("parser doc: {:?}", doc);
         let parser = Self { doc };
         parser.validate()?;
         Ok(parser)
@@ -53,6 +59,14 @@ impl ArgumentParser {
         self.doc["program"].as_str().unwrap_or_default()
     }
 
+    /// Add a prefix to the name of each argument in the output script.
+    /// For example, if a argument named "verbose", and prefix is "myapp_",
+    /// the final output script will be `myapp_verbose=xxx`. By default,
+    /// no prefix will be applied.
+    pub fn output_prefix(&self) -> &str {
+        self.doc["output_prefix"].as_str().unwrap_or_default()
+    }
+
     /// A description of the program.
     pub fn about(&self) -> &str {
         self.doc["about"].as_str().unwrap_or_default()
@@ -66,12 +80,38 @@ impl ArgumentParser {
             .unwrap_or_default()
     }
 
+    pub fn build_clap_command(&self) -> Result<Command> {
+        let mut command = Command::new(self.program().to_owned()).about(self.about().to_owned());
+
+        for arg in self.args().iter() {
+            println!("  -- ARG: {:?}", arg);
+            println!("    short: {:?} long: {:?}", arg.short(), arg.long());
+            let mut clap_arg = Arg::new(arg.name()?.to_string());
+            if let Some(short) = arg.short() {
+                clap_arg = clap_arg.short(short);
+            }
+            if let Some(long) = arg.long() {
+                clap_arg = clap_arg.long(long);
+            }
+            if arg.is_flag() {
+                clap_arg = clap_arg.action(clap::ArgAction::SetTrue);
+            }
+            if let Some(help) = arg.help() {
+                clap_arg = clap_arg.help(help.to_string());
+            }
+
+            command = command.arg(clap_arg);
+        }
+        command.build();
+        Ok(command)
+    }
+
     fn validate(&self) -> Result<()> {
         if self.version().is_empty() {
-            return Err(Error::MissingSpecVersion);
+            return Err(Error::MissingVersion);
         }
         if self.program().is_empty() {
-            return Err(Error::MissingProgramName);
+            return Err(Error::MissingProgram);
         }
         Ok(())
     }
@@ -152,37 +192,38 @@ pub fn parse(spec_yaml: &str, optstring: &[String]) -> Result<String> {
     let mut docs = YamlLoader::load_from_str(spec_yaml)?;
     validate_root_docs(&docs)?;
 
+    // Build an ArgumentParser instance by parsing the given spec.
     let parser = ArgumentParser::new(docs.remove(0))?;
-    let mut command = Command::new(parser.program().to_owned()).about(parser.about().to_owned());
+    let command = parser.build_clap_command()?;
 
-    let args = parser.args();
-    for arg in args.iter() {
-        println!("  -- ARG: {:?}", arg);
-        println!("    short: {:?} long: {:?}", arg.short(), arg.long());
-        let mut clap_arg = Arg::new(arg.name()?.to_string());
-        if let Some(short) = arg.short() {
-            clap_arg = clap_arg.short(short);
-        }
-        if let Some(long) = arg.long() {
-            clap_arg = clap_arg.long(long);
-        }
-        if arg.is_flag() {
-            clap_arg = clap_arg.action(clap::ArgAction::SetTrue);
-        }
-        if let Some(help) = arg.help() {
-            clap_arg = clap_arg.help(help.to_string());
-        }
-
-        command = command.arg(clap_arg);
-    }
-    command.build();
-
+    // Let the command parse optstring. And use the matches to compose the eval script.
+    println!("OPTSTRING: {:?}", optstring);
     let matches = command.get_matches_from(optstring);
+    compose_shell_script(&parser, &matches)
+}
 
-    // for arg in args.iter() {}
+fn compose_shell_script(parser: &ArgumentParser, matches: &ArgMatches) -> Result<String> {
+    let mut script = String::with_capacity(256);
 
-    println!("[MATCHES]: {:?}", matches);
-    Ok("".to_string())
+    for arg in parser.args().iter() {
+        let key = arg.name()?;
+        println!(
+            "  --> parsing key: {}, value: {:?}",
+            key,
+            matches.get_raw(key),
+        );
+        if arg.is_flag() {
+            let flag = matches.get_flag(key);
+            writeln!(&mut script, "{}={}", key, flag)?;
+        } else {
+            let value = matches.get_one::<String>(key);
+            if let Some(given_value) = value {
+                writeln!(&mut script, "{}={}", key, given_value)?;
+            }
+        }
+    }
+
+    Ok(script)
 }
 
 fn validate_root_docs(docs: &Vec<Yaml>) -> Result<()> {
@@ -211,17 +252,48 @@ fn extract_short_long_name(haystack: &str) -> (Option<String>, Option<String>) {
 mod test {
     use yaml_rust::{Yaml, YamlLoader};
 
+    use crate::parser::Error;
+
     use super::{Argument, ArgumentParser};
 
     #[test]
-    fn get_program() -> anyhow::Result<()> {
-        let parser = ArgumentParser::new(load_yaml("program: hello")?)?;
+    fn test_require_version_and_program_in_spec() -> anyhow::Result<()> {
+        let parser = ArgumentParser::new(load_yaml(
+            r#"
+        version: "1.0"
+        program: hello
+        "#,
+        )?)?;
         assert_eq!("hello", parser.program());
         Ok(())
     }
 
     #[test]
-    fn arg_bare_name() -> anyhow::Result<()> {
+    fn test_err_missing_version() -> anyhow::Result<()> {
+        let parser_rs = ArgumentParser::new(load_yaml(
+            r#"
+        program: hello
+        "#,
+        )?);
+
+        assert!(matches!(parser_rs, Err(Error::MissingVersion)));
+        Ok(())
+    }
+
+    #[test]
+    fn test_err_missing_program() -> anyhow::Result<()> {
+        let parser_rs = ArgumentParser::new(load_yaml(
+            r#"
+        version: "1.0"
+        "#,
+        )?);
+
+        assert!(matches!(parser_rs, Err(Error::MissingProgram)));
+        Ok(())
+    }
+
+    #[test]
+    fn test_arg_bare_name() -> anyhow::Result<()> {
         let doc = load_yaml("SRC")?;
         let parg = Argument::new(&doc);
         assert_eq!(Some("SRC"), parg.bare_name());
@@ -230,7 +302,7 @@ mod test {
     }
 
     #[test]
-    fn arg_name() -> anyhow::Result<()> {
+    fn test_arg_name() -> anyhow::Result<()> {
         let doc = load_yaml(
             r#"
         name: DEST
@@ -242,6 +314,7 @@ mod test {
         Ok(())
     }
 
+    /// Helper function to load a YAML and returns the first doc.
     fn load_yaml(yaml: &str) -> anyhow::Result<Yaml> {
         let mut docs = YamlLoader::load_from_str(yaml)?;
         Ok(docs.remove(0))

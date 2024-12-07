@@ -9,15 +9,15 @@ Usage
 
 set -euo pipefail
 
-program="
+program='
 version: 1.0
 program: upload
 args: [SRC, DST, -v/--verbose, -t/--threads, --protocol]
-"
+'
 
-program="
+program='
 ---
-version: 1.0
+version: "1.0"
 program: upload
 args:
   - name: SRC
@@ -38,7 +38,7 @@ args:
     type: string
     default: scp
     select: [scp, rsync, aws]
-"
+'
 eval "$( ramen "$program" -- "$@" )"
 
 main() {
