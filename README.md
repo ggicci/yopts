@@ -69,3 +69,8 @@ I’ve never been a fan of `getopt` or `getopts`. That’s why I created `ramen`
 `ramen` takes a different approach by allowing you to define the argument parser in a descriptive YAML format. This simplifies the syntax while leveraging the powerful parsing capabilities of [clap](https://docs.rs/clap/latest/clap/index.html).
 
 I know ramen is still in its early stages, but I hope it can save us time and effort when implementing argument parsers for SHELL scripts.
+
+### Why `getopts`, not `ramen`?
+
+`getopts` comes along with the Linux system, `ramen` doesn't.
+
