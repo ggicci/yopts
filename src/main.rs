@@ -1,8 +1,8 @@
 use anyhow::{anyhow, Result};
 use clap::Parser;
+use log::LevelFilter;
 use ramen;
 use std::io::{self, Read};
-
 const APP: &str = "ramen";
 const DESC_ABOUT: &str = "An easier way to define and parse arguments in SHELL scripts.";
 
@@ -25,21 +25,13 @@ struct Cli {
     optstring: Vec<String>,
 }
 
-/// Read data from STDIN if provided.
-fn read_spec_from_stdin() -> Result<String> {
-    // Avoids reading from stdin when it is connected to a terminal.
-    if atty::is(atty::Stream::Stdin) {
-        return Ok("".to_string());
-    }
-    let mut pipe_input = String::new();
-    io::stdin()
-        .read_to_string(&mut pipe_input)
-        .map_err(|e| anyhow!("read STDIN error: {}", e))?;
-    Ok(pipe_input)
-}
-
 fn main() -> Result<()> {
     let mut cli = Cli::parse();
+    init_logging(if cli.debug {
+        LevelFilter::Debug
+    } else {
+        LevelFilter::Warn
+    });
 
     let spec_from_pipe = read_spec_from_stdin()?;
     let spec_from_arg = cli.spec.unwrap_or_default();
@@ -57,9 +49,26 @@ fn main() -> Result<()> {
 
     // Since we will be calling clap::Command::get_matches_from(VEC) API
     // to parse the optstring, and it treats the first element from the given
-    // VEC, we insert a dummy value here to the optstring.
+    // VEC as the name of the program, we insert a dummy value here to optstring.
     cli.optstring.insert(0, "PROG".to_string());
     let output = ramen::parse(&spec, &cli.optstring)?;
     println!("{}", output);
     Ok(())
+}
+
+/// Read data from STDIN if provided.
+fn read_spec_from_stdin() -> Result<String> {
+    // Avoids reading from stdin when it is connected to a terminal.
+    if atty::is(atty::Stream::Stdin) {
+        return Ok("".to_string());
+    }
+    let mut pipe_input = String::new();
+    io::stdin()
+        .read_to_string(&mut pipe_input)
+        .map_err(|e| anyhow!("read STDIN error: {}", e))?;
+    Ok(pipe_input)
+}
+
+fn init_logging(level_filter: LevelFilter) {
+    env_logger::Builder::new().filter_level(level_filter).init();
 }

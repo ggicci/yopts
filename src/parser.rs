@@ -1,4 +1,5 @@
 use clap::{Arg, ArgMatches, Command};
+use log::debug;
 use once_cell::sync::Lazy;
 use regex::{Match, Regex};
 use std::fmt::Write;
@@ -42,8 +43,10 @@ pub struct ArgumentParser {
 }
 
 impl ArgumentParser {
+    const LOG_TARGET: &str = "ArgumentParser";
+
     pub fn new(doc: Yaml) -> Result<Self> {
-        println!("parser doc: {:?}", doc);
+        debug!(target: Self::LOG_TARGET, "parse spec doc: {doc:?}");
         let parser = Self { doc };
         parser.validate()?;
         Ok(parser)
@@ -84,8 +87,7 @@ impl ArgumentParser {
         let mut command = Command::new(self.program().to_owned()).about(self.about().to_owned());
 
         for arg in self.args().iter() {
-            println!("  -- ARG: {:?}", arg);
-            println!("    short: {:?} long: {:?}", arg.short(), arg.long());
+            debug!(target: Self::LOG_TARGET, "build clap command with given arg: {arg:?}");
             let mut clap_arg = Arg::new(arg.name()?.to_string());
             if let Some(short) = arg.short() {
                 clap_arg = clap_arg.short(short);
@@ -126,7 +128,6 @@ pub struct Argument<'a> {
 
 impl<'a> Argument<'a> {
     pub fn new(doc: &'a Yaml) -> Self {
-        println!("Argument::new() with {:?}", doc);
         Self { doc }
     }
 
@@ -197,7 +198,7 @@ pub fn parse(spec_yaml: &str, optstring: &[String]) -> Result<String> {
     let command = parser.build_clap_command()?;
 
     // Let the command parse optstring. And use the matches to compose the eval script.
-    println!("OPTSTRING: {:?}", optstring);
+    debug!(target: "ramen::parse", "OPTSTRING: {optstring:?}");
     let matches = command.get_matches_from(optstring);
     compose_shell_script(&parser, &matches)
 }
@@ -207,9 +208,9 @@ fn compose_shell_script(parser: &ArgumentParser, matches: &ArgMatches) -> Result
 
     for arg in parser.args().iter() {
         let key = arg.name()?;
-        println!(
-            "  --> parsing key: {}, value: {:?}",
-            key,
+        debug!(
+            target: "ramen::compose_shell_script",
+            "key={key:?}, value={:?}",
             matches.get_raw(key),
         );
         if arg.is_flag() {
