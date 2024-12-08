@@ -87,8 +87,8 @@ impl ArgumentParser {
         let mut command = Command::new(self.program().to_owned()).about(self.about().to_owned());
 
         for arg in self.args().iter() {
-            debug!(target: Self::LOG_TARGET, "build clap command with given arg: {arg:?}");
-            let mut clap_arg = Arg::new(arg.name()?.to_string());
+            debug!(target: Self::LOG_TARGET, "build clap command, arg={arg:?}, id={}", arg.id()?);
+            let mut clap_arg = Arg::new(arg.id()?);
             if let Some(short) = arg.short() {
                 clap_arg = clap_arg.short(short);
             }
@@ -131,14 +131,27 @@ impl<'a> Argument<'a> {
         Self { doc }
     }
 
+    /// Only when an argument was defined using a single string, instead
+    /// of a hash representation in the given YAML spec, it will return
+    /// the whole string as the "bare name". ex.
+    /// `args: [SRC, DST, -t/--threads, -s, --long]`, here every string
+    /// in this array represents an argument. And the whole string of each
+    /// is identified as a "bare name". "SRC" is a bare name, so as the rest.
     pub fn bare_name(&self) -> Option<&str> {
         self.doc.as_str()
     }
 
-    pub fn name(&self) -> Result<&str> {
-        self.bare_name()
-            .or(self.doc["name"].as_str())
-            .ok_or(Error::MissingArgumentName)
+    /// The value of "name" in the provided arg definition.
+    /// ex.
+    ///
+    /// ```
+    /// args:
+    /// - name: threads
+    ///   short: -t
+    ///   long: --threads
+    /// ```
+    pub fn name(&self) -> Option<&str> {
+        self.doc["name"].as_str()
     }
 
     /// Provide the short arg name, ex. -c, -d, -t, etc.
@@ -160,6 +173,17 @@ impl<'a> Argument<'a> {
             .or(self.doc["long"].as_str())
             .unwrap_or_default();
         extract_short_long_name(haystack).1
+    }
+
+    /// The id of the argument, it uses the value in the following order:
+    /// name -> long -> short -> bare_name.
+    pub fn id(&self) -> Result<String> {
+        self.name()
+            .map(|x| x.to_string())
+            .or(self.long())
+            .or(self.short().map(|x| x.to_string()))
+            .or(self.bare_name().map(|x| x.to_string()))
+            .ok_or(Error::MissingArgumentName)
     }
 
     /// The type of the argument, can be string, number, boolean.
@@ -207,19 +231,22 @@ fn compose_shell_script(parser: &ArgumentParser, matches: &ArgMatches) -> Result
     let mut script = String::with_capacity(256);
 
     for arg in parser.args().iter() {
-        let key = arg.name()?;
+        let key = arg.id()?;
+        let prefix = parser.output_prefix();
+        let output_key = format!("{prefix}{key}");
+
         debug!(
             target: "ramen::compose_shell_script",
             "key={key:?}, value={:?}",
-            matches.get_raw(key),
+            matches.get_raw(&key),
         );
         if arg.is_flag() {
-            let flag = matches.get_flag(key);
-            writeln!(&mut script, "{}={}", key, flag)?;
+            let flag = matches.get_flag(&key);
+            writeln!(&mut script, "{}={}", output_key, flag)?;
         } else {
-            let value = matches.get_one::<String>(key);
+            let value = matches.get_one::<String>(&key);
             if let Some(given_value) = value {
-                writeln!(&mut script, "{}={}", key, given_value)?;
+                writeln!(&mut script, "{}={}", output_key, given_value)?;
             }
         }
     }
@@ -298,7 +325,7 @@ mod test {
         let doc = load_yaml("SRC")?;
         let parg = Argument::new(&doc);
         assert_eq!(Some("SRC"), parg.bare_name());
-        assert_eq!("SRC", parg.name()?);
+        assert_eq!("SRC", parg.id()?);
         Ok(())
     }
 
@@ -311,7 +338,7 @@ mod test {
         )?;
         let parg = Argument::new(&doc);
         assert!(parg.bare_name().is_none());
-        assert_eq!("DEST", parg.name()?);
+        assert_eq!("DEST", parg.id()?);
         Ok(())
     }
 
