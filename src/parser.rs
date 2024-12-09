@@ -6,7 +6,11 @@ use std::fmt::Write;
 use thiserror::Error;
 use yaml_rust::{ScanError, Yaml, YamlLoader};
 
+use crate::version::Version;
+
 pub type Result<T> = std::result::Result<T, Error>;
+
+pub const MAGIC_PROG_NAME: &str = "__RAMEN_PROG__";
 
 static REG_SHORT_LONG_ARG_NAME: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^-(?P<short>[a-zA-Z])(/--(?P<long>[a-zA-Z][a-zA-Z0-9-]{1,}))*|--(?P<only_long>[a-zA-Z][a-zA-Z0-9-]{1,})$").unwrap()
@@ -24,9 +28,10 @@ pub enum Error {
     MultiDocs,
 
     #[error(
-        "version must be provided, the value MUST be a semver string (key: version, ex: \"1.2.3\")"
+        "invalid version, must be one of: {:?}, (key: version)",
+        Version::supported_versions()
     )]
-    MissingVersion,
+    InvalidVersion,
 
     #[error("missing program name (key: program)")]
     MissingProgram,
@@ -55,6 +60,11 @@ impl ArgumentParser {
     /// The version of the spec.
     pub fn version(&self) -> &str {
         self.doc["version"].as_str().unwrap_or_default()
+    }
+
+    /// Convert the version number from string to `Version`.
+    pub fn parsed_version(&self) -> Option<Version> {
+        Version::try_from(self.version()).ok()
     }
 
     /// The name of the program.
@@ -109,8 +119,8 @@ impl ArgumentParser {
     }
 
     fn validate(&self) -> Result<()> {
-        if self.version().is_empty() {
-            return Err(Error::MissingVersion);
+        if self.parsed_version().is_none() {
+            return Err(Error::InvalidVersion);
         }
         if self.program().is_empty() {
             return Err(Error::MissingProgram);
@@ -144,7 +154,7 @@ impl<'a> Argument<'a> {
     /// The value of "name" in the provided arg definition.
     /// ex.
     ///
-    /// ```
+    /// ```yaml
     /// args:
     /// - name: threads
     ///   short: -t
@@ -212,8 +222,6 @@ impl<'a> Argument<'a> {
 }
 
 pub fn parse(spec_yaml: &str, optstring: &[String]) -> Result<String> {
-    let _res = String::new();
-
     let mut docs = YamlLoader::load_from_str(spec_yaml)?;
     validate_root_docs(&docs)?;
 
@@ -221,10 +229,23 @@ pub fn parse(spec_yaml: &str, optstring: &[String]) -> Result<String> {
     let parser = ArgumentParser::new(docs.remove(0))?;
     let command = parser.build_clap_command()?;
 
+    let optstring = normalize_optstring(optstring);
     // Let the command parse optstring. And use the matches to compose the eval script.
     debug!(target: "ramen::parse", "OPTSTRING: {optstring:?}");
     let matches = command.get_matches_from(optstring);
     compose_shell_script(&parser, &matches)
+}
+
+/// Add some salts to the given optstring.
+/// Since we will be calling clap::Command::get_matches_from(VEC) API
+/// to parse the optstring, and it treats the first element from the given
+/// VEC as the name of the program, we insert a dummy value here to optstring.
+fn normalize_optstring(optstring: &[String]) -> Vec<String> {
+    let mut new_optstring = Vec::from(optstring);
+    if new_optstring.len() == 0 || new_optstring[0] != MAGIC_PROG_NAME {
+        new_optstring.insert(0, MAGIC_PROG_NAME.to_string());
+    }
+    new_optstring
 }
 
 fn compose_shell_script(parser: &ArgumentParser, matches: &ArgMatches) -> Result<String> {
@@ -288,7 +309,7 @@ mod test {
     fn test_require_version_and_program_in_spec() -> anyhow::Result<()> {
         let parser = ArgumentParser::new(load_yaml(
             r#"
-        version: "1.0"
+        version: "1.0.0"
         program: hello
         "#,
         )?)?;
@@ -304,7 +325,7 @@ mod test {
         "#,
         )?);
 
-        assert!(matches!(parser_rs, Err(Error::MissingVersion)));
+        assert!(matches!(parser_rs, Err(Error::InvalidVersion)));
         Ok(())
     }
 
@@ -312,7 +333,7 @@ mod test {
     fn test_err_missing_program() -> anyhow::Result<()> {
         let parser_rs = ArgumentParser::new(load_yaml(
             r#"
-        version: "1.0"
+        version: "1.0.0"
         "#,
         )?);
 

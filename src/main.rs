@@ -1,7 +1,6 @@
 use anyhow::{anyhow, Result};
 use clap::Parser;
 use log::LevelFilter;
-use ramen;
 use std::io::{self, Read};
 const APP: &str = "ramen";
 const DESC_ABOUT: &str = "An easier way to define and parse arguments in SHELL scripts.";
@@ -26,7 +25,7 @@ struct Cli {
 }
 
 fn main() -> Result<()> {
-    let mut cli = Cli::parse();
+    let cli = Cli::parse();
     init_logging(if cli.debug {
         LevelFilter::Debug
     } else {
@@ -47,10 +46,6 @@ fn main() -> Result<()> {
         spec_from_pipe
     };
 
-    // Since we will be calling clap::Command::get_matches_from(VEC) API
-    // to parse the optstring, and it treats the first element from the given
-    // VEC as the name of the program, we insert a dummy value here to optstring.
-    cli.optstring.insert(0, "PROG".to_string());
     let output = ramen::parse(&spec, &cli.optstring)?;
     println!("{}", output);
     Ok(())

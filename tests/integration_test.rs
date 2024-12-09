@@ -3,7 +3,7 @@ use ramen;
 #[test]
 fn test_parse_only_names() {
     const PROGRAM: &str = r#"
-    version: 1.0
+    version: "1.0.0"
     program: upload
     args: [SRC, DST, -v/--verbose, -t/--threads, --protocol]
     "#;
@@ -11,22 +11,33 @@ fn test_parse_only_names() {
         "/path/to/src",
         "/path/to/dst",
         "-v",
+        "true",
         "--threads",
-        "4",
+        "8",
         "--protocol",
-        "scp",
+        "s3",
     ]
     .iter()
     .map(|&x| x.to_string())
     .collect();
     let output = ramen::parse(PROGRAM, &optstring).unwrap();
-    println!("{}", output);
+
+    expect_output(
+        vec![
+            "SRC=/path/to/src",
+            "DST=/path/to/dst",
+            "verbose=true",
+            "threads=8",
+            "protocol=s3",
+        ],
+        &output,
+    )
 }
 
 #[test]
 fn test_parse_boolean_flags() {
     const PROGRAM: &str = r#"
-    version: 1.0
+    version: "1.0.0"
     program: upload
     args:
       - SRC
@@ -51,5 +62,25 @@ fn test_parse_boolean_flags() {
     .map(|&x| x.to_string())
     .collect();
     let output = ramen::parse(PROGRAM, &optstring).unwrap();
-    println!("{}", output);
+
+    expect_output(
+        vec![
+            "SRC=/path/to/src",
+            "DST=/path/to/dst",
+            "verbose=true",
+            "threads=4",
+            "protocol=scp",
+        ],
+        &output,
+    )
+}
+
+fn expect_output(expected_lines: Vec<&str>, got_output: &str) {
+    let mut sorted_expected_lines = expected_lines.clone();
+    sorted_expected_lines.sort();
+
+    let mut sorted_got_lines: Vec<&str> = got_output.lines().collect();
+    sorted_got_lines.sort();
+
+    assert_eq!(sorted_expected_lines, sorted_got_lines);
 }
