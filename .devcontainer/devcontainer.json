@@ -1,5 +1,5 @@
 {
-  "name": "Dev - ggicci/ramen",
+  "name": "Dev - ggicci/yopts",
   "build": {
     "dockerfile": "Dockerfile"
   },

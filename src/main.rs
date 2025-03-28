@@ -2,7 +2,7 @@ use anyhow::{anyhow, Result};
 use clap::Parser;
 use log::LevelFilter;
 use std::io::{self, Read};
-const APP: &str = "ramen";
+const APP: &str = "yopts";
 const DESC_ABOUT: &str = "An easier way to define and parse arguments in SHELL scripts.";
 
 #[derive(Debug, Parser)]
@@ -19,7 +19,7 @@ struct Cli {
     /// The arguments to parse. Passed as the last argument, after a "--".
     /// Usually it's "$@" in the bash script. e.g.
     ///
-    ///     eval "$( ramen "$program" -- "$@" )"
+    ///     eval "$( yopts "$program" -- "$@" )"
     #[arg(last = true)]
     optstring: Vec<String>,
 }
@@ -46,7 +46,7 @@ fn main() -> Result<()> {
         spec_from_pipe
     };
 
-    let output = ramen::parse(&spec, &cli.optstring)?;
+    let output = yopts::parse(&spec, &cli.optstring)?;
     println!("{}", output);
     Ok(())
 }

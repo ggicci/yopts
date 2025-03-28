@@ -1,4 +1,4 @@
-use ramen;
+use yopts;
 
 #[test]
 fn test_parse_only_names() {
@@ -20,7 +20,7 @@ fn test_parse_only_names() {
     .iter()
     .map(|&x| x.to_string())
     .collect();
-    let output = ramen::parse(PROGRAM, &optstring).unwrap();
+    let output = yopts::parse(PROGRAM, &optstring).unwrap();
 
     expect_output(
         vec![
@@ -61,7 +61,7 @@ fn test_parse_boolean_flags() {
     .iter()
     .map(|&x| x.to_string())
     .collect();
-    let output = ramen::parse(PROGRAM, &optstring).unwrap();
+    let output = yopts::parse(PROGRAM, &optstring).unwrap();
 
     expect_output(
         vec![

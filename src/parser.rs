@@ -10,7 +10,7 @@ use crate::version::Version;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-pub const MAGIC_PROG_NAME: &str = "__RAMEN_PROG__";
+pub const MAGIC_PROG_NAME: &str = "__YOPTS_PROG__";
 
 static REG_SHORT_LONG_ARG_NAME: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^-(?P<short>[a-zA-Z])(/--(?P<long>[a-zA-Z][a-zA-Z0-9-]{1,}))*|--(?P<only_long>[a-zA-Z][a-zA-Z0-9-]{1,})$").unwrap()
@@ -231,7 +231,7 @@ pub fn parse(spec_yaml: &str, optstring: &[String]) -> Result<String> {
 
     let optstring = normalize_optstring(optstring);
     // Let the command parse optstring. And use the matches to compose the eval script.
-    debug!(target: "ramen::parse", "OPTSTRING: {optstring:?}");
+    debug!(target: "yopts::parse", "OPTSTRING: {optstring:?}");
     let matches = command.get_matches_from(optstring);
     compose_shell_script(&parser, &matches)
 }
@@ -257,7 +257,7 @@ fn compose_shell_script(parser: &ArgumentParser, matches: &ArgMatches) -> Result
         let output_key = format!("{prefix}{key}");
 
         debug!(
-            target: "ramen::compose_shell_script",
+            target: "yopts::compose_shell_script",
             "key={key:?}, value={:?}",
             matches.get_raw(&key),
         );

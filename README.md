@@ -1,6 +1,6 @@
-# ramen 🍜
+# yopts 🍜
 
-An easier way to define and parse arguments in SHELL scripts. [Why ramen?](#faq)
+An easier way to define and parse arguments in SHELL scripts. [Why yopts?](#faq)
 
 _Enjoy your SHELL scripting!_
 
@@ -18,7 +18,7 @@ args: [SRC, DST, -v/--verbose, -t/--threads, --protocol]
 '
 
 main() {
-  eval "$( ramen "$ARGUMENT_PARSER" -- "$@" )"
+  eval "$( yopts "$ARGUMENT_PARSER" -- "$@" )"
 
     echo "
 SRC: $SRC
@@ -38,7 +38,7 @@ More granual control over arguments:
 ARGUMENT_PARSER='
 version: "1.0"
 program: upload
-output_prefix: ramen_
+output_prefix: yopts_
 args:
   - name: SRC
   - name: DST
@@ -62,15 +62,15 @@ args:
 
 ## FAQ
 
-### Why `ramen`? Not `getopt` or `getopts`?
+### Why `yopts`? Not `getopt` or `getopts`?
 
-I’ve never been a fan of `getopt` or `getopts`. That’s why I created `ramen`. Despite spending countless hours reading their documentation and following community examples, I always came away empty-handed, unable to retain anything. For me, learning either of the two just isn’t worth the effort.
+I’ve never been a fan of `getopt` or `getopts`. That’s why I created `yopts`. Despite spending countless hours reading their documentation and following community examples, I always came away empty-handed, unable to retain anything. For me, learning either of the two just isn’t worth the effort.
 
-`ramen` takes a different approach by allowing you to define the argument parser in a descriptive YAML format. This simplifies the syntax while leveraging the powerful parsing capabilities of [clap](https://docs.rs/clap/latest/clap/index.html).
+`yopts` takes a different approach by allowing you to define the argument parser in a descriptive YAML format. This simplifies the syntax while leveraging the powerful parsing capabilities of [clap](https://docs.rs/clap/latest/clap/index.html).
 
-I know ramen is still in its early stages, but I hope it can save us time and effort when implementing argument parsers for SHELL scripts.
+I know yopts is still in its early stages, but I hope it can save us time and effort when implementing argument parsers for SHELL scripts.
 
-### Why `getopts`, not `ramen`?
+### Why `getopts`, not `yopts`?
 
-`getopts` comes along with the Linux system, `ramen` doesn't.
+`getopts` comes along with the Linux system, `yopts` doesn't.
 
