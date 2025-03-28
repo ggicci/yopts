@@ -12,7 +12,7 @@ _Enjoy your SHELL scripting!_
 set -euo pipefail
 
 ARGUMENT_PARSER='
-version: "1.0"
+version: "1.0.0"
 program: upload
 args: [SRC, DST, -v/--verbose, -t/--threads, --protocol]
 '
@@ -36,7 +36,7 @@ More granual control over arguments:
 
 ```bash
 ARGUMENT_PARSER='
-version: "1.0"
+version: "1.0.0"
 program: upload
 output_prefix: yopts_
 args:
