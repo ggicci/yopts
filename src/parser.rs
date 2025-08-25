@@ -112,8 +112,11 @@ impl ArgumentParser {
             if let Some(help) = arg.help() {
                 clap_arg = clap_arg.help(help.to_string());
             }
+            if let Some(default_value) = arg.default_value() {
+                clap_arg = clap_arg.default_value(default_value.to_owned());
+            }
 
-            clap_arg = clap_arg.required(is_positional);
+            clap_arg = clap_arg.required(is_positional || arg.required());
             command = command.arg(clap_arg);
         }
         command.build();
@@ -204,12 +207,16 @@ impl<'a> Argument<'a> {
     }
 
     pub fn is_flag(&self) -> bool {
-        ["bool", "boolean"].contains(&self.typ())
+        ["bool", "boolean", "flag"].contains(&self.typ())
     }
 
     /// The default value of the argument on absent.
-    pub fn default(&self) -> &str {
-        self.doc["default"].as_str().unwrap_or_default()
+    pub fn default_value(&self) -> Option<&str> {
+        self.doc["default"].as_str()
+    }
+
+    pub fn required(&self) -> bool {
+        self.doc["required"].as_str().unwrap_or_default() == "true"
     }
 
     pub fn help(&self) -> Option<&str> {
