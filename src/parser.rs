@@ -1,4 +1,4 @@
-use clap::{error::ErrorKind, Arg, ArgMatches, Command};
+use clap::{Arg, ArgMatches, Command};
 use log::debug;
 use once_cell::sync::Lazy;
 use regex::{Match, Regex};
@@ -236,17 +236,7 @@ pub fn parse(spec_yaml: &str, optstring: &[String]) -> Result<String> {
     debug!(target: "yopts::parse", "OPTSTRING: {optstring:?}");
     match command.try_get_matches_from(optstring) {
         Ok(matches) => compose_shell_script(&parser, &matches),
-        Err(e) => match e.kind() {
-            ErrorKind::DisplayHelp => {
-                e.print().ok();
-                std::process::exit(1);
-            }
-            // ErrorKind::DisplayVersion => {
-            //     e.print().ok();
-            //     std::process::exit(0);
-            // }
-            _ => e.exit(),
-        },
+        Err(e) => print_error_in_shell(&e),
     }
 }
 
@@ -285,6 +275,18 @@ fn compose_shell_script(parser: &ArgumentParser, matches: &ArgMatches) -> Result
             }
         }
     }
+
+    Ok(script)
+}
+
+fn print_error_in_shell(e: &clap::Error) -> Result<String> {
+    let mut script = String::with_capacity(256);
+
+    let msg = e.render();
+    writeln!(&mut script, "cat >&2 <<'YOPTS_DISPLAY'")?;
+    writeln!(&mut script, "{}", msg.ansi())?;
+    writeln!(&mut script, "YOPTS_DISPLAY")?;
+    writeln!(&mut script, "exit {}", e.exit_code())?;
 
     Ok(script)
 }
