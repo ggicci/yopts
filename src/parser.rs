@@ -39,6 +39,9 @@ pub enum Error {
 
     #[error(transparent)]
     Format(#[from] std::fmt::Error),
+
+    #[error(transparent)]
+    QuoteError(#[from] shlex::QuoteError),
 }
 
 pub struct ArgumentParser {
@@ -278,7 +281,12 @@ fn compose_shell_script(parser: &ArgumentParser, matches: &ArgMatches) -> Result
         } else {
             let value = matches.get_one::<String>(&key);
             if let Some(given_value) = value {
-                writeln!(&mut script, "{}={}", output_key, given_value)?;
+                writeln!(
+                    &mut script,
+                    "{}={}",
+                    output_key,
+                    shlex::try_quote(given_value)?,
+                )?;
             }
         }
     }
