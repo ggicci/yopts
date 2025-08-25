@@ -1,4 +1,4 @@
-use clap::{Arg, ArgMatches, Command};
+use clap::{error::ErrorKind, Arg, ArgMatches, Command};
 use log::debug;
 use once_cell::sync::Lazy;
 use regex::{Match, Regex};
@@ -234,8 +234,20 @@ pub fn parse(spec_yaml: &str, optstring: &[String]) -> Result<String> {
     let optstring = normalize_optstring(parser.program(), optstring);
     // Let the command parse optstring. And use the matches to compose the eval script.
     debug!(target: "yopts::parse", "OPTSTRING: {optstring:?}");
-    let matches = command.get_matches_from(optstring);
-    compose_shell_script(&parser, &matches)
+    match command.try_get_matches_from(optstring) {
+        Ok(matches) => compose_shell_script(&parser, &matches),
+        Err(e) => match e.kind() {
+            ErrorKind::DisplayHelp => {
+                e.print().ok();
+                std::process::exit(1);
+            }
+            // ErrorKind::DisplayVersion => {
+            //     e.print().ok();
+            //     std::process::exit(0);
+            // }
+            _ => e.exit(),
+        },
+    }
 }
 
 /// Add some salts to the given optstring.
