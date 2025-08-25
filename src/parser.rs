@@ -10,8 +10,6 @@ use crate::version::Version;
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-pub const MAGIC_PROG_NAME: &str = "__YOPTS_PROG__";
-
 static REG_SHORT_LONG_ARG_NAME: Lazy<Regex> = Lazy::new(|| {
     Regex::new(r"^-(?P<short>[a-zA-Z])(/--(?P<long>[a-zA-Z][a-zA-Z0-9-]{1,}))*|--(?P<only_long>[a-zA-Z][a-zA-Z0-9-]{1,})$").unwrap()
 });
@@ -233,7 +231,7 @@ pub fn parse(spec_yaml: &str, optstring: &[String]) -> Result<String> {
     let parser = ArgumentParser::new(docs.remove(0))?;
     let command = parser.build_clap_command()?;
 
-    let optstring = normalize_optstring(optstring);
+    let optstring = normalize_optstring(parser.program(), optstring);
     // Let the command parse optstring. And use the matches to compose the eval script.
     debug!(target: "yopts::parse", "OPTSTRING: {optstring:?}");
     let matches = command.get_matches_from(optstring);
@@ -244,10 +242,10 @@ pub fn parse(spec_yaml: &str, optstring: &[String]) -> Result<String> {
 /// Since we will be calling clap::Command::get_matches_from(VEC) API
 /// to parse the optstring, and it treats the first element from the given
 /// VEC as the name of the program, we insert a dummy value here to optstring.
-fn normalize_optstring(optstring: &[String]) -> Vec<String> {
+fn normalize_optstring(program: &str, optstring: &[String]) -> Vec<String> {
     let mut new_optstring = Vec::from(optstring);
-    if new_optstring.len() == 0 || new_optstring[0] != MAGIC_PROG_NAME {
-        new_optstring.insert(0, MAGIC_PROG_NAME.to_string());
+    if new_optstring.len() == 0 || new_optstring[0] != program {
+        new_optstring.insert(0, program.to_string());
     }
     new_optstring
 }
