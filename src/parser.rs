@@ -207,7 +207,7 @@ impl<'a> Argument<'a> {
     }
 
     pub fn is_flag(&self) -> bool {
-        ["bool", "boolean", "flag"].contains(&self.typ())
+        ["bool", "boolean"].contains(&self.typ())
     }
 
     /// The default value of the argument on absent.
@@ -216,7 +216,7 @@ impl<'a> Argument<'a> {
     }
 
     pub fn required(&self) -> bool {
-        self.doc["required"].as_str().unwrap_or_default() == "true"
+        self.doc["required"].as_bool().unwrap_or_default()
     }
 
     pub fn help(&self) -> Option<&str> {
