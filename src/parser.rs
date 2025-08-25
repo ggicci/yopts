@@ -48,7 +48,7 @@ pub struct ArgumentParser {
 }
 
 impl ArgumentParser {
-    const LOG_TARGET: &str = "ArgumentParser";
+    const LOG_TARGET: &'static str = "ArgumentParser";
 
     pub fn new(doc: Yaml) -> Result<Self> {
         debug!(target: Self::LOG_TARGET, "parse spec doc: {doc:?}");
@@ -98,12 +98,15 @@ impl ArgumentParser {
 
         for arg in self.args().iter() {
             debug!(target: Self::LOG_TARGET, "build clap command, arg={arg:?}, id={}", arg.id()?);
+            let mut is_positional = true;
             let mut clap_arg = Arg::new(arg.id()?);
             if let Some(short) = arg.short() {
                 clap_arg = clap_arg.short(short);
+                is_positional = false;
             }
             if let Some(long) = arg.long() {
                 clap_arg = clap_arg.long(long);
+                is_positional = false;
             }
             if arg.is_flag() {
                 clap_arg = clap_arg.action(clap::ArgAction::SetTrue);
@@ -112,6 +115,7 @@ impl ArgumentParser {
                 clap_arg = clap_arg.help(help.to_string());
             }
 
+            clap_arg = clap_arg.required(is_positional);
             command = command.arg(clap_arg);
         }
         command.build();
