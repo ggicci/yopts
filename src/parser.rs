@@ -286,7 +286,7 @@ fn print_error_in_shell(e: &clap::Error) -> Result<String> {
     writeln!(&mut script, "cat >&2 <<'YOPTS_DISPLAY'")?;
     writeln!(&mut script, "{}", msg.ansi())?;
     writeln!(&mut script, "YOPTS_DISPLAY")?;
-    writeln!(&mut script, "return {}", e.exit_code())?;
+    writeln!(&mut script, "false")?;
 
     Ok(script)
 }
